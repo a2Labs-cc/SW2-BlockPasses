@@ -1,0 +1,56 @@
+name: Release on main
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Extract plugin version from PluginMetadata
+        id: version
+        shell: bash
+        run: |
+          line=$(grep -m1 'PluginMetadata' src/BlockPasses.cs)
+          version=$(echo "$line" | sed -E 's/.*Version\s*=\s*"([^"]+)".*/\1/')
+          echo "Detected version: $version"
+          if [ -z "$version" ]; then
+            echo "::error::Failed to extract version from PluginMetadata" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build plugin
+        run: |
+          dotnet restore
+          dotnet publish BlockPasses.csproj -c Release -o build/publish
+
+      - name: Zip build
+        run: |
+          cd build/publish
+          zip -r ../BlockPasses.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: BlockPasses v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            build/BlockPasses.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
