@@ -40,8 +40,10 @@ jobs:
 
       - name: Zip build
         run: |
-          cd build/publish
-          zip -r ../BlockPasses.zip .
+          mkdir -p build/dist/BlockPasses
+          cp -r build/publish/* build/dist/BlockPasses/
+          cd build/dist
+          zip -r ../BlockPasses.zip BlockPasses
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
