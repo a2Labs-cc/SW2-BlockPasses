@@ -11,6 +11,7 @@ public class PrecachingService
 {
     private readonly ISwiftlyCore _core;
     private BlockPassesConfig _config;
+    private List<BlockPassEntityConfig> _mapBlocks = new();
     private readonly List<string> _modelsToPrecache = new();
 
     public PrecachingService(ISwiftlyCore core, BlockPassesConfig config)
@@ -28,6 +29,12 @@ public class PrecachingService
         PrecacheAllModels();
     }
 
+    public void UpdateMapBlocks(IEnumerable<BlockPassEntityConfig> blocks)
+    {
+        _mapBlocks = blocks?.ToList() ?? new List<BlockPassEntityConfig>();
+        PrecacheAllModels();
+    }
+
     /// <summary>
     /// Precaches all models from config using GameFileSystem.PrecacheFile.
     /// This is called immediately on load as a fallback for late loading.
@@ -35,15 +42,20 @@ public class PrecachingService
     private void PrecacheAllModels()
     {
         _modelsToPrecache.Clear();
-        
-        foreach (var kvp in _config.Maps)
+
+        foreach (var model in _config.ModelPresets)
         {
-            foreach (var entity in kvp.Value)
+            if (model is not null && !string.IsNullOrWhiteSpace(model.ModelPath))
             {
-                if (!string.IsNullOrWhiteSpace(entity.ModelPath))
-                {
-                    AddModel(entity.ModelPath);
-                }
+                AddModel(model.ModelPath);
+            }
+        }
+
+        foreach (var entity in _mapBlocks)
+        {
+            if (!string.IsNullOrWhiteSpace(entity.ModelPath))
+            {
+                AddModel(entity.ModelPath);
             }
         }
     }
@@ -60,9 +72,7 @@ public class PrecachingService
         if (!_modelsToPrecache.Contains(path))
         {
             _modelsToPrecache.Add(path);
-            // Precache immediately via filesystem as fallback
-            _core.GameFileSystem.PrecacheFile(path, "GAME");
-            _core.Logger.LogInformation("BlockPasses: Precached model: {Path}", path);
+            _core.Logger.LogInformation("BlockPasses: Model queued for precache on next map load: {Path}", path);
         }
     }
 
