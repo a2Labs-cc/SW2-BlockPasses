@@ -21,7 +21,7 @@ using BlockPasses.Configuration;
 
 namespace BlockPasses;
 
-[PluginMetadata(Id = "BlockPasses", Version = "2.0.1", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
+[PluginMetadata(Id = "BlockPasses", Version = "2.0.2", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
 public partial class BlockPasses : BasePlugin
 {
     private BlockPassesConfig _config = null!;
@@ -65,6 +65,7 @@ public partial class BlockPasses : BasePlugin
         // Hook precache event for proper manifest registration on map load
         Core.Event.OnPrecacheResource += OnPrecache;
         Core.Event.OnClientProcessUsercmds += OnClientProcessUsercmds;
+        Core.Event.OnClientPutInServer += OnClientPutInServer;
         Core.Event.OnClientDisconnected += OnClientDisconnected;
 
         // Hook game events for round/warmup transitions
@@ -102,6 +103,7 @@ public partial class BlockPasses : BasePlugin
         UnregisterEditorCommands();
         Core.Event.OnPrecacheResource -= OnPrecache;
         Core.Event.OnClientProcessUsercmds -= OnClientProcessUsercmds;
+        Core.Event.OnClientPutInServer -= OnClientPutInServer;
         Core.Event.OnClientDisconnected -= OnClientDisconnected;
 
         // Unhook game events
@@ -129,6 +131,27 @@ public partial class BlockPasses : BasePlugin
         if (player is null || !player.IsValid) return;
         _editorService?.OnClientDisconnected(player);
         UpdateEditorCommandRegistration();
+
+        try
+        {
+            var mapName = Core.Engine.GlobalVars.MapName.Value;
+            Core.Scheduler.NextTick(() => ApplyBlocksForCurrentPlayerCount(mapName));
+        }
+        catch
+        {
+        }
+    }
+
+    private void OnClientPutInServer(IOnClientPutInServerEvent @event)
+    {
+        try
+        {
+            var mapName = Core.Engine.GlobalVars.MapName.Value;
+            Core.Scheduler.NextTick(() => ApplyBlocksForCurrentPlayerCount(mapName));
+        }
+        catch
+        {
+        }
     }
 
     private void OnClientProcessUsercmds(IOnClientProcessUsercmdsEvent @event)
@@ -275,7 +298,7 @@ public partial class BlockPasses : BasePlugin
         try
         {
             var mapName = Core.Engine.GlobalVars.MapName.Value;
-            Core.Scheduler.NextTick(() => SpawnBlocksForMap(mapName));
+            Core.Scheduler.NextTick(() => ApplyBlocksForCurrentPlayerCount(mapName));
         }
         catch (Exception ex)
         {
@@ -325,7 +348,7 @@ public partial class BlockPasses : BasePlugin
             if (shouldSpawn)
             {
                 var mapName = Core.Engine.GlobalVars.MapName.Value;
-                Core.Scheduler.NextTick(() => SpawnBlocksForMap(mapName));
+                Core.Scheduler.NextTick(() => ApplyBlocksForCurrentPlayerCount(mapName));
 
                 var blocks = _mapDataService?.GetBlocks(mapName);
                 if (blocks is not null && blocks.Count > 0)
@@ -373,6 +396,58 @@ public partial class BlockPasses : BasePlugin
         {
             Core.Logger.LogInformation("BlockPasses: Spawned {Count} blocks for map {Map}", blocks.Count, mapName);
         }
+    }
+
+    private void ApplyBlocksForCurrentPlayerCount(string? mapName)
+    {
+        if (_mapDataService is null || _entityManager is null) return;
+
+        mapName = (mapName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(mapName)) return;
+
+        var connectedPlayers = GetConnectedPlayerCount();
+        if (_config.Players <= 0 || connectedPlayers >= _config.Players)
+        {
+            _entityManager.RemoveAll(immediate: true);
+            return;
+        }
+
+        var blocks = _mapDataService.GetBlocks(mapName);
+        if (blocks is null || blocks.Count == 0)
+        {
+            _entityManager.RemoveAll(immediate: true);
+            return;
+        }
+
+        if (!_entityManager.AreBlocksSpawned(blocks))
+        {
+            _entityManager.EnsureBlocksSpawned(blocks);
+        }
+    }
+
+    private int GetConnectedPlayerCount()
+    {
+        var spectators = new HashSet<ulong>();
+        try
+        {
+            foreach (var spec in Core.PlayerManager.GetSpectators())
+            {
+                if (spec is null || !spec.IsValid) continue;
+                spectators.Add(spec.SteamID);
+            }
+        }
+        catch
+        {
+        }
+
+        var count = 0;
+        foreach (var p in Core.PlayerManager.GetAllPlayers())
+        {
+            if (p is null || !p.IsValid) continue;
+            if (spectators.Contains(p.SteamID)) continue;
+            count++;
+        }
+        return count;
     }
 
     private static string? NormalizeColorTag(string color)
