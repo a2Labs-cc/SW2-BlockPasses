@@ -21,7 +21,7 @@ using BlockPasses.Configuration;
 
 namespace BlockPasses;
 
-[PluginMetadata(Id = "BlockPasses", Version = "2.0.0", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
+[PluginMetadata(Id = "BlockPasses", Version = "2.0.1", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
 public partial class BlockPasses : BasePlugin
 {
     private BlockPassesConfig _config = null!;
@@ -165,6 +165,7 @@ public partial class BlockPasses : BasePlugin
         _editorCommandGuids.Add(Core.Command.RegisterCommand("bp_scale", OnCmdScale, registerRaw: true, permission: "blockpasses.admin"));
         _editorCommandGuids.Add(Core.Command.RegisterCommand("bp_up", OnCmdUp, registerRaw: true, permission: "blockpasses.admin"));
         _editorCommandGuids.Add(Core.Command.RegisterCommand("bp_down", OnCmdDown, registerRaw: true, permission: "blockpasses.admin"));
+        _editorCommandGuids.Add(Core.Command.RegisterCommand("bp_spawnall", OnCmdSpawnAll, registerRaw: true, permission: "blockpasses.admin"));
         _editorCommandGuids.Add(Core.Command.RegisterCommand("bp_save", OnCmdSave, registerRaw: true, permission: "blockpasses.admin"));
 
         _editorCommandsRegistered = true;

@@ -105,6 +105,7 @@ This file contains the placed blocks for that map (`ModelPath`, `Origin`, `Angle
 | `bp_down [step]` | `blockpasses.admin` | Moves aimed block down by step units (default: 5) |
 | `bp_rot [degrees]` | `blockpasses.admin` | Rotates aimed block by degrees (default: 15) |
 | `bp_scale [delta]` | `blockpasses.admin` | Changes aimed block scale by delta (default: 0.1) |
+| `bp_spawnall` | `blockpasses.admin` | Respawns all saved blocks for the current map (edit mode only) |
 | `bp_save` | `blockpasses.admin` | Saves current edited blocks for the map |
 
 ### Editor Controls

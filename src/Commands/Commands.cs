@@ -114,6 +114,21 @@ public partial class BlockPasses
         };
         builder.AddOption(remove);
 
+        if (editModeEnabled)
+        {
+            var spawnAll = new ButtonMenuOption("Spawn all blocks");
+            spawnAll.Click += async (_, args) =>
+            {
+                core.Scheduler.NextTick(() =>
+                {
+                    SpawnAllBlocks(args.Player);
+                    core.MenusAPI.OpenMenuForPlayer(args.Player, BuildBlockPassMenu(core, args.Player));
+                });
+                await ValueTask.CompletedTask;
+            };
+            builder.AddOption(spawnAll);
+        }
+
         const float moveStep = 5f;
         var up = new ButtonMenuOption($"Move up (+{moveStep})");
         up.Click += async (_, args) =>
@@ -377,6 +392,56 @@ public partial class BlockPasses
         var step = 5f;
         if (context.Args.Length > 0 && float.TryParse(context.Args[0], out var parsed)) step = parsed;
         _editorService.MoveBlockAtAim(context.Sender, -Math.Abs(step));
+    }
+
+    public void OnCmdSpawnAll(ICommandContext context)
+    {
+        if (!context.IsSentByPlayer || context.Sender is null)
+        {
+            context.Reply("This command can only be used by a player.");
+            return;
+        }
+
+        SpawnAllBlocks(context.Sender);
+    }
+
+    private void SpawnAllBlocks(IPlayer player)
+    {
+        if (player is null || !player.IsValid) return;
+
+        if (_editorService is null || _mapDataService is null || _entityManager is null)
+        {
+            SendChat(player, "BlockPasses editor not ready.");
+            return;
+        }
+
+        if (!_editorService.IsInEditMode(player))
+        {
+            SendChat(player, "You must be in edit mode to spawn blocks.");
+            return;
+        }
+
+        var mapName = Core.Engine.GlobalVars.MapName.Value;
+        if (string.IsNullOrWhiteSpace(mapName)) return;
+
+        var blocks = _mapDataService.GetBlocks(mapName);
+        if (blocks is null || blocks.Count == 0)
+        {
+            SendChat(player, "No blocks configured for this map.");
+            return;
+        }
+
+        _entityManager.RemoveAll(immediate: true);
+        Core.Scheduler.NextTick(() =>
+        {
+            foreach (var cfg in blocks)
+            {
+                if (cfg is null) continue;
+                _entityManager.Spawn(cfg);
+            }
+        });
+
+        SendChat(player, $"Spawned {blocks.Count} blocks.");
     }
 
     public void OnCmdSave(ICommandContext context)
