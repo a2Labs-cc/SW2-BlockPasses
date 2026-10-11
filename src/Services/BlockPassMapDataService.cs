@@ -200,7 +200,7 @@ public sealed class BlockPassMapDataService
     private string GetMapFilePath(string mapName)
     {
         return Path.Combine(
-            _core.CSGODirectory,
+            _core.GameFilesDirectory,
             "addons",
             "swiftlys2",
             "data",

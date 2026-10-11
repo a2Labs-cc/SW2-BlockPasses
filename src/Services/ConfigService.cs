@@ -71,7 +71,7 @@ public class ConfigService
     private string GetConfigPath()
     {
         return Path.Combine(
-            _core.CSGODirectory,
+            _core.GameFilesDirectory,
             "addons",
             "swiftlys2",
             "configs",

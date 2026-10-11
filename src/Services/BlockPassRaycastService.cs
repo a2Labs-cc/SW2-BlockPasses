@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
+using SwiftlyS2.Shared.Trace;
 
 namespace BlockPasses;
 
@@ -16,31 +18,6 @@ public sealed class BlockPassRaycastService
         _core = core;
     }
 
-    public unsafe CTraceFilter CreateTraceFilter(uint ignoreIndex)
-    {
-        var filter = CreateTraceFilterInternal();
-        filter.QueryShapeAttributes.InteractsWith = MaskTrace.Solid | MaskTrace.WorldGeometry | MaskTrace.StaticLevel | MaskTrace.PhysicsProp;
-        filter.QueryShapeAttributes.InteractsExclude = MaskTrace.Empty;
-        filter.QueryShapeAttributes.InteractsAs = MaskTrace.Empty;
-        filter.QueryShapeAttributes.ObjectSetMask = RnQueryObjectSet.All;
-        filter.QueryShapeAttributes.CollisionGroup = CollisionGroup.Default;
-        filter.QueryShapeAttributes.EntityIdsToIgnore[0] = ignoreIndex;
-        filter.QueryShapeAttributes.EntityIdsToIgnore[1] = 0;
-        return filter;
-    }
-
-    private static unsafe CTraceFilter CreateTraceFilterInternal()
-    {
-        try
-        {
-            var withBool = Activator.CreateInstance(typeof(CTraceFilter), new object?[] { true });
-            if (withBool is not null) return (CTraceFilter)withBool;
-        }
-        catch { }
-
-        return (CTraceFilter)(Activator.CreateInstance(typeof(CTraceFilter)) ?? default(CTraceFilter));
-    }
-
     public unsafe bool TryGetTargetPosition(IPlayer player, float? fixedDistance, out Vector targetPosition)
     {
         targetPosition = Vector.Zero;
@@ -49,7 +26,8 @@ public sealed class BlockPassRaycastService
         if (pawn == null || !pawn.IsValid) return false;
 
         var absOrigin = pawn.AbsOrigin ?? Vector.Zero;
-        var eyePosition = pawn.CameraServices?.OldPlayerViewOffsetZ != null
+        var camera = pawn.CameraServices;
+        var eyePosition = camera is not null && camera.IsValid
             ? new Vector(absOrigin.X, absOrigin.Y, absOrigin.Z + 64f)
             : absOrigin;
 
@@ -64,13 +42,17 @@ public sealed class BlockPassRaycastService
         }
 
         var traceStart = eyePosition + (forward * 16.0f);
-        var trace = new CGameTrace();
-        var ray = new Ray_t();
-        ray.Init(Vector.Zero);
-        var filter = CreateTraceFilter((uint)pawn.Index);
-
         var traceEnd = traceStart + (forward * 8192.0f);
-        _core.Trace.TraceShape(traceStart, traceEnd, ray, filter, ref trace);
+        TraceParams? traceParams = new TraceParams
+        {
+            InteractWith = MaskTrace.Solid | MaskTrace.WorldGeometry | MaskTrace.StaticLevel | MaskTrace.PhysicsProp,
+            InteractExclude = MaskTrace.Empty,
+            InteractAs = MaskTrace.Empty,
+            ObjectQuery = RnQueryObjectSet.All,
+            Collision = CollisionGroup.Default,
+            EntitiesToIgnore = new List<CEntityInstance> { pawn }
+        };
+        var trace = _core.Trace.TraceShapeLine(in traceStart, in traceEnd, in traceParams);
 
         if (!trace.StartInSolid && trace.Fraction < 1.0f)
         {

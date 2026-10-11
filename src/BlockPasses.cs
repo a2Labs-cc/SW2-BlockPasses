@@ -22,7 +22,7 @@ using BlockPasses.Configuration;
 
 namespace BlockPasses;
 
-[PluginMetadata(Id = "BlockPasses", Version = "2.0.3", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
+[PluginMetadata(Id = "BlockPasses", Version = "2.0.4", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
 public partial class BlockPasses : BasePlugin
 {
     private BlockPassesConfig _config = null!;
