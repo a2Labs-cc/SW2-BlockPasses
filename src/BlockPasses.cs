@@ -11,6 +11,7 @@ using SwiftlyS2.Shared.EntitySystem;
 using SwiftlyS2.Shared.GameEventDefinitions;
 using SwiftlyS2.Shared.GameEvents;
 using SwiftlyS2.Shared.Events;
+using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Misc;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
@@ -21,7 +22,7 @@ using BlockPasses.Configuration;
 
 namespace BlockPasses;
 
-[PluginMetadata(Id = "BlockPasses", Version = "2.0.2", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
+[PluginMetadata(Id = "BlockPasses", Version = "2.0.3", Name = "BlockPasses", Author = "aga", Description = "Blocks selected map passages with solid props until player-count threshold is met. Includes in-game editor for easy block placement and management.")]
 public partial class BlockPasses : BasePlugin
 {
     private BlockPassesConfig _config = null!;
@@ -64,7 +65,7 @@ public partial class BlockPasses : BasePlugin
 
         // Hook precache event for proper manifest registration on map load
         Core.Event.OnPrecacheResource += OnPrecache;
-        Core.Event.OnClientProcessUsercmds += OnClientProcessUsercmds;
+        Core.GameHooks.Controller.ProcessUsercmds.Pre += OnProcessUsercmds;
         Core.Event.OnClientPutInServer += OnClientPutInServer;
         Core.Event.OnClientDisconnected += OnClientDisconnected;
 
@@ -102,7 +103,7 @@ public partial class BlockPasses : BasePlugin
     {
         UnregisterEditorCommands();
         Core.Event.OnPrecacheResource -= OnPrecache;
-        Core.Event.OnClientProcessUsercmds -= OnClientProcessUsercmds;
+        Core.GameHooks.Controller.ProcessUsercmds.Pre -= OnProcessUsercmds;
         Core.Event.OnClientPutInServer -= OnClientPutInServer;
         Core.Event.OnClientDisconnected -= OnClientDisconnected;
 
@@ -128,8 +129,7 @@ public partial class BlockPasses : BasePlugin
     private void OnClientDisconnected(IOnClientDisconnectedEvent @event)
     {
         var player = Core.PlayerManager.GetPlayer(@event.PlayerId);
-        if (player is null || !player.IsValid) return;
-        _editorService?.OnClientDisconnected(player);
+        if (player is not null) _editorService?.OnClientDisconnected(player);
         UpdateEditorCommandRegistration();
 
         try
@@ -154,14 +154,15 @@ public partial class BlockPasses : BasePlugin
         }
     }
 
-    private void OnClientProcessUsercmds(IOnClientProcessUsercmdsEvent @event)
+    private void OnProcessUsercmds(ref ProcessUsercmdsPreContext ctx)
     {
-        if (_editorService is null) return;
+        var editor = _editorService;
+        if (editor is null || !editor.IsActive) return;
 
-        var player = Core.PlayerManager.GetPlayer(@event.PlayerId);
+        var player = ctx.Params.Player;
         if (player is null || !player.IsValid) return;
 
-        _editorService.OnClientProcessUsercmds(player, @event.Usercmds);
+        editor.OnProcessUsercmds(player, ctx.Params.Usercmds);
     }
 
     private void UpdateEditorCommandRegistration()

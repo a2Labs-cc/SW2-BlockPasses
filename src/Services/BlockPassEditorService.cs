@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 using BlockPasses.Configuration;
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.ProtobufDefinitions;
@@ -83,12 +84,17 @@ public sealed class BlockPassEditorService : IDisposable
 
     public int EditModePlayerCount => _editModePlayers.Count;
 
+    public bool IsActive => _editModePlayers.Count > 0 || _grab.GrabbedCount > 0;
+
     public void OnClientDisconnected(IPlayer player)
     {
-        DisableEditMode(player);
+        var steamId = player.SteamID;
+        _grab.StopGrab(steamId);
+        _editModePlayers.Remove(steamId);
+        _lastUseButtonState.Remove(steamId);
     }
 
-    public void OnClientProcessUsercmds(IPlayer player, IEnumerable<CSGOUserCmdPB> usercmds)
+    public void OnProcessUsercmds(IPlayer player, IReadOnlyList<IUserCmd> usercmds)
     {
         if (!IsInEditMode(player))
         {
@@ -236,19 +242,8 @@ public sealed class BlockPassEditorService : IDisposable
         player?.SendChat("BlockPasses blocks saved.");
     }
 
-    private static bool IsUseButtonPressed(IEnumerable<CSGOUserCmdPB> usercmds)
-    {
-        const ulong useMask = (ulong)InputBitMask_t.IN_USE;
-        foreach (var cmd in usercmds)
-        {
-            if (cmd?.Base?.ButtonsPb == null) continue;
-            var buttons = cmd.Base.ButtonsPb;
-            if ((buttons.Buttonstate1 & useMask) != 0 || (buttons.Buttonstate2 & useMask) != 0 || (buttons.Buttonstate3 & useMask) != 0)
-                return true;
-        }
-
-        return false;
-    }
+    private static bool IsUseButtonPressed(IReadOnlyList<IUserCmd> usercmds) =>
+        BlockPassGrabService.IsButtonDown(usercmds, (ulong)InputBitMask_t.IN_USE);
 
     private void UpdateTickHandler()
     {

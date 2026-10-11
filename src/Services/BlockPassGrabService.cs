@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.GameHooks;
 using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.ProtobufDefinitions;
@@ -121,7 +122,7 @@ public sealed class BlockPassGrabService
         OnGrabsChanged?.Invoke();
     }
 
-    public void ProcessUserCmds(IPlayer player, IEnumerable<CSGOUserCmdPB> usercmds)
+    public void ProcessUserCmds(IPlayer player, IReadOnlyList<IUserCmd> usercmds)
     {
         if (!IsGrabbing(player.SteamID)) return;
 
@@ -173,7 +174,7 @@ public sealed class BlockPassGrabService
         }
     }
 
-    private void HandleRotateInput(IPlayer player, IEnumerable<CSGOUserCmdPB> usercmds)
+    private void HandleRotateInput(IPlayer player, IReadOnlyList<IUserCmd> usercmds)
     {
         var steamId = player.SteamID;
 
@@ -295,17 +296,18 @@ public sealed class BlockPassGrabService
     private static Vector GetEyePosition(CCSPlayerPawn pawn)
     {
         var absOrigin = pawn.AbsOrigin ?? Vector.Zero;
-        return pawn.CameraServices?.OldPlayerViewOffsetZ != null
+        var camera = pawn.CameraServices;
+        return camera is not null && camera.IsValid
             ? new Vector(absOrigin.X, absOrigin.Y, absOrigin.Z + 64f)
             : absOrigin;
     }
 
-    private static bool IsButtonDown(IEnumerable<CSGOUserCmdPB> usercmds, ulong mask)
+    internal static bool IsButtonDown(IReadOnlyList<IUserCmd> usercmds, ulong mask)
     {
-        foreach (var cmd in usercmds)
+        for (var i = 0; i < usercmds.Count; i++)
         {
-            if (cmd?.Base?.ButtonsPb == null) continue;
-            var buttons = cmd.Base.ButtonsPb;
+            var buttons = GetButtons(usercmds[i]);
+            if (buttons is null) continue;
             if ((buttons.Buttonstate1 & mask) != 0 || (buttons.Buttonstate2 & mask) != 0 || (buttons.Buttonstate3 & mask) != 0)
                 return true;
         }
@@ -313,15 +315,30 @@ public sealed class BlockPassGrabService
         return false;
     }
 
-    private static void ClearButtonMask(IEnumerable<CSGOUserCmdPB> usercmds, ulong mask)
+    private static void ClearButtonMask(IReadOnlyList<IUserCmd> usercmds, ulong mask)
     {
-        foreach (var cmd in usercmds)
+        for (var i = 0; i < usercmds.Count; i++)
         {
-            if (cmd?.Base?.ButtonsPb == null) continue;
-            cmd.Base.ButtonsPb.Buttonstate1 &= ~mask;
-            cmd.Base.ButtonsPb.Buttonstate2 &= ~mask;
-            cmd.Base.ButtonsPb.Buttonstate3 &= ~mask;
+            var buttons = GetButtons(usercmds[i]);
+            if (buttons is null) continue;
+            buttons.Buttonstate1 &= ~mask;
+            buttons.Buttonstate2 &= ~mask;
+            buttons.Buttonstate3 &= ~mask;
         }
+    }
+
+    private static CInButtonStatePB? GetButtons(IUserCmd? cmd)
+    {
+        if (cmd is null || cmd.Address == 0) return null;
+
+        var pb = cmd.CSGOUserCmd;
+        if (pb is null || !pb.IsValid) return null;
+
+        var baseCmd = pb.Base;
+        if (baseCmd is null || !baseCmd.IsValid) return null;
+
+        var buttons = baseCmd.ButtonsPb;
+        return buttons is not null && buttons.IsValid ? buttons : null;
     }
 
     private static float NormalizeYaw(float yaw)
